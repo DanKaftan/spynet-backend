@@ -1,6 +1,6 @@
 """User routes."""
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.models.user import UserResponse, UserUpdate
 from app.middleware import get_current_user
 from app.utils.permissions import require_manager
@@ -27,6 +27,66 @@ async def list_users(current_user: dict = Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve users: {str(e)}"
+        )
+
+
+@router.get("/detectives", response_model=List[UserResponse], status_code=status.HTTP_200_OK)
+async def list_detectives(
+    manager_id: Optional[str] = Query(None, description="Filter by manager ID"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    List all detective users.
+    
+    - **manager_id** (optional): Filter by assigned manager ID
+    
+    Returns list of all users with role="detective".
+    If manager_id is provided, returns only detectives assigned to that manager.
+    Both detectives and managers can access this endpoint.
+    """
+    try:
+        # Get all users and filter for detectives
+        all_users = await get_supabase_service().list_users()
+        detectives = [user for user in all_users if user.get("role") == "detective"]
+        
+        # Filter by manager if specified
+        if manager_id:
+            detectives = [det for det in detectives if det.get("manager_id") == manager_id]
+        
+        return detectives
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve detectives: {str(e)}"
+        )
+
+
+@router.get("/my-detectives", response_model=List[UserResponse], status_code=status.HTTP_200_OK)
+async def get_my_detectives(current_user: dict = Depends(get_current_user)):
+    """
+    Get detectives assigned to the logged-in manager.
+    
+    Returns list of detectives assigned to the current manager.
+    Requires manager role.
+    """
+    try:
+        # Check if user is a manager
+        require_manager(current_user.get("role"))
+        
+        # Get detectives assigned to this manager
+        all_users = await get_supabase_service().list_users()
+        my_detectives = [
+            user for user in all_users 
+            if user.get("role") == "detective" and user.get("manager_id") == current_user.get("id")
+        ]
+        
+        return my_detectives
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve your detectives: {str(e)}"
         )
 
 

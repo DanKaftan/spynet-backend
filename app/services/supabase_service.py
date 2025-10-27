@@ -9,6 +9,11 @@ class SupabaseService:
     
     def __init__(self):
         """Initialize Supabase client."""
+        if not settings.supabase_url or not settings.supabase_key:
+            raise ValueError(
+                "Supabase credentials not configured. Please set SUPABASE_URL and SUPABASE_KEY "
+                "in your .env file or environment variables."
+            )
         self.client: Client = create_client(settings.supabase_url, settings.supabase_key)
     
     async def get_user_by_id(self, user_id: str) -> Optional[dict]:
@@ -154,5 +159,12 @@ class SupabaseService:
         return response.data is not None
 
 
-# Global instance
-supabase_service = SupabaseService()
+# Global instance (will be initialized on first use or when imported)
+supabase_service = None
+
+def get_supabase_service() -> SupabaseService:
+    """Get or create Supabase service instance."""
+    global supabase_service
+    if supabase_service is None:
+        supabase_service = SupabaseService()
+    return supabase_service

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.models.case import CaseCreate, CaseResponse, CaseUpdate
 from app.middleware import get_current_user
 from app.utils.permissions import require_manager, require_detective_or_manager
-from app.services.supabase_service import supabase_service
+from app.services.supabase_service import get_supabase_service
 
 router = APIRouter(prefix="/cases", tags=["Cases"])
 
@@ -39,7 +39,7 @@ async def list_cases(
         if case_status:
             filters["status"] = case_status
         
-        cases = await supabase_service.get_cases(filters)
+        cases = await get_supabase_service().get_cases(filters)
         return cases
         
     except HTTPException:
@@ -64,7 +64,7 @@ async def get_case(case_id: str, current_user: dict = Depends(get_current_user))
     try:
         require_detective_or_manager(current_user.get("role"))
         
-        case = await supabase_service.get_case_by_id(case_id)
+        case = await get_supabase_service().get_case_by_id(case_id)
         
         if not case:
             raise HTTPException(
@@ -109,7 +109,7 @@ async def create_case(
         case_data = case.dict(exclude_none=True)
         
         # If no detective_id is provided, it's unassigned
-        created_case = await supabase_service.create_case(case_data)
+        created_case = await get_supabase_service().create_case(case_data)
         return created_case
         
     except HTTPException:
@@ -140,7 +140,7 @@ async def update_case(
         require_detective_or_manager(current_user.get("role"))
         
         # Get existing case
-        case = await supabase_service.get_case_by_id(case_id)
+        case = await get_supabase_service().get_case_by_id(case_id)
         
         if not case:
             raise HTTPException(
@@ -170,7 +170,7 @@ async def update_case(
                 detail="No valid fields to update"
             )
         
-        updated_case = await supabase_service.update_case(case_id, update_data)
+        updated_case = await get_supabase_service().update_case(case_id, update_data)
         return updated_case
         
     except HTTPException:
@@ -195,7 +195,7 @@ async def delete_case(case_id: str, current_user: dict = Depends(get_current_use
         require_manager(current_user.get("role"))
         
         # Check if case exists
-        case = await supabase_service.get_case_by_id(case_id)
+        case = await get_supabase_service().get_case_by_id(case_id)
         
         if not case:
             raise HTTPException(
@@ -203,7 +203,7 @@ async def delete_case(case_id: str, current_user: dict = Depends(get_current_use
                 detail="Case not found"
             )
         
-        await supabase_service.delete_case(case_id)
+        await get_supabase_service().delete_case(case_id)
         return None
         
     except HTTPException:

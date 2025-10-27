@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.user import UserResponse, UserUpdate
 from app.middleware import get_current_user
 from app.utils.permissions import require_manager
-from app.services.supabase_service import supabase_service
+from app.services.supabase_service import get_supabase_service
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -21,7 +21,7 @@ async def list_users(current_user: dict = Depends(get_current_user)):
     require_manager(current_user.get("role"))
     
     try:
-        users = await supabase_service.list_users()
+        users = await get_supabase_service().list_users()
         return users
     except Exception as e:
         raise HTTPException(
@@ -47,7 +47,7 @@ async def get_user(user_id: str, current_user: dict = Depends(get_current_user))
                 detail="You can only view your own profile"
             )
         
-        user = await supabase_service.get_user_by_id(user_id)
+        user = await get_supabase_service().get_user_by_id(user_id)
         
         if not user:
             raise HTTPException(
@@ -105,7 +105,7 @@ async def update_user(
                 detail="No fields to update"
             )
         
-        updated_user = await supabase_service.update_user(user_id, update_data)
+        updated_user = await get_supabase_service().update_user(user_id, update_data)
         return updated_user
         
     except HTTPException:

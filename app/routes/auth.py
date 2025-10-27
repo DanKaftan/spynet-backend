@@ -1,4 +1,5 @@
 """Authentication routes."""
+from typing import Optional
 from fastapi import APIRouter, HTTPException, status
 from app.models.user import UserCreate, UserResponse
 from app.services.auth_service import auth_service
@@ -16,7 +17,7 @@ class LoginRequest(BaseModel):
 class AuthResponse(BaseModel):
     """Authentication response model."""
     user: dict
-    access_token: str
+    access_token: Optional[str] = None  # Optional if email confirmation is required
 
 
 @router.post("/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -39,10 +40,13 @@ async def signup(user: UserCreate):
             role=user.role
         )
         return AuthResponse(**result)
+    except HTTPException:
+        raise
     except Exception as e:
+        error_msg = str(e) if str(e) else repr(e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=f"Signup failed: {error_msg}"
         )
 
 

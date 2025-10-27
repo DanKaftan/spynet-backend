@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import HTTPException, status
 from supabase import Client
 from app.config import settings
-from app.services.supabase_service import supabase_service
+from app.services.supabase_service import get_supabase_service
 
 
 class AuthService:
@@ -11,7 +11,14 @@ class AuthService:
     
     def __init__(self):
         """Initialize auth service with Supabase client."""
-        self.client: Client = supabase_service.client
+        self._supabase_service = None
+    
+    @property
+    def client(self) -> Client:
+        """Get Supabase client."""
+        if self._supabase_service is None:
+            self._supabase_service = get_supabase_service()
+        return self._supabase_service.client
     
     async def signup(self, email: str, password: str, name: str, role: str) -> dict:
         """
@@ -52,17 +59,20 @@ class AuthService:
                 "role": role
             }
             
-            created_user = await supabase_service.create_user(user_data)
+            created_user = await get_supabase_service().create_user(user_data)
             
             return {
                 "user": created_user,
                 "access_token": auth_response.session.access_token if auth_response.session else None
             }
             
+        except HTTPException:
+            raise
         except Exception as e:
+            error_msg = str(e) if str(e) else repr(e)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Signup failed: {str(e)}"
+                detail=f"Signup failed: {error_msg}"
             )
     
     async def login(self, email: str, password: str) -> dict:
@@ -94,7 +104,7 @@ class AuthService:
             user_id = auth_response.user.id
             
             # Get user profile from database
-            user = await supabase_service.get_user_by_id(user_id)
+            user = await get_supabase_service().get_user_by_id(user_id)
             
             if not user:
                 raise HTTPException(
@@ -133,7 +143,7 @@ class AuthService:
                 return None
             
             user_id = auth_response.user.id
-            return await supabase_service.get_user_by_id(user_id)
+            return await get_supabase_service().get_user_by_id(user_id)
             
         except Exception:
             return None

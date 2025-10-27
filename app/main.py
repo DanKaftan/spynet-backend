@@ -11,11 +11,13 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Configure CORS
+# Configure CORS  
+# For development: allow ALL origins
+# Using regex that matches everything to truly allow all origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origin_regex=r".*",  # Regex matching all origins
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

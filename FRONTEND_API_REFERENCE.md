@@ -32,6 +32,7 @@ Create a new user account.
     name: string;
     email: string;
     role: "detective" | "manager";
+    manager_id: string | null;  // Assigned manager ID (for detectives)
     created_at: string;
   };
   access_token: string | null;  // JWT token (null if email confirmation required)
@@ -75,6 +76,7 @@ Login an existing user.
     name: string;
     email: string;
     role: "detective" | "manager";
+    manager_id: string | null;  // Assigned manager ID (for detectives)
     created_at: string;
   };
   access_token: string;  // JWT token
@@ -102,6 +104,7 @@ Array<{
   name: string;
   email: string;
   role: "detective" | "manager";
+  manager_id: string | null;  // Assigned manager ID
   created_at: string;
 }>
 ```
@@ -177,6 +180,7 @@ Authorization: Bearer <token>
   name: string;
   email: string;
   role: "detective" | "manager";
+  manager_id: string | null;  // Assigned manager ID
   created_at: string;
 }
 ```
@@ -200,10 +204,26 @@ Content-Type: application/json
   name?: string;
   email?: string;     // Managers only
   role?: "detective" | "manager";  // Managers only
+  manager_id?: string | null;  // Assign detective to manager (managers only)
 }
 ```
 
-**Response:** Updated user object
+**Response:** Updated user object (includes manager_id field)
+
+**Example:**
+```typescript
+// Assign a detective to a manager
+PUT /users/{detective_id}
+{
+  "manager_id": "manager-uuid-here"
+}
+
+// Unassign detective from manager (set to null)
+PUT /users/{detective_id}
+{
+  "manager_id": null
+}
+```
 
 ---
 
@@ -425,7 +445,7 @@ export const usersAPI = {
     return apiCall<any>(`/users/${userId}`, { method: "GET" }, token);
   },
 
-  update: async (userId: string, data: { name?: string; email?: string; role?: string }, token: string) => {
+  update: async (userId: string, data: { name?: string; email?: string; role?: string; manager_id?: string | null }, token: string) => {
     return apiCall<any>(`/users/${userId}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -516,18 +536,34 @@ await casesAPI.update(caseId, { status: "in_progress" }, token);
 ### Assign Detective to Manager
 ```typescript
 const token = localStorage.getItem("token");
-await usersAPI.update(detectiveId, { manager_id: managerId }, token);
+
+// Assign detective to a manager
+await usersAPI.update(detectiveId, { 
+  manager_id: managerId 
+}, token);
+
+// Unassign detective (set manager_id to null)
+await usersAPI.update(detectiveId, { 
+  manager_id: null 
+}, token);
 ```
 
 ### Get Detectives for a Manager
 ```typescript
 const token = localStorage.getItem("token");
 
+// Get all detectives (all detectives in system)
+const allDetectives = await usersAPI.getDetectives(token);
+
 // Get all my detectives (authenticated manager)
 const myDetectives = await usersAPI.getMyDetectives(token);
 
-// Get all detectives assigned to a specific manager
+// Get detectives assigned to a specific manager
 const assignedDetectives = await usersAPI.getDetectives(token, managerId);
+
+// Get unassigned detectives (filter for null manager_id)
+const allDetectives = await usersAPI.getDetectives(token);
+const unassigned = allDetectives.filter(det => !det.manager_id);
 ```
 
 ---

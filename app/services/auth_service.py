@@ -59,7 +59,14 @@ class AuthService:
                 "role": role
             }
             
-            created_user = await get_supabase_service().create_user(user_data)
+            supa = get_supabase_service()
+            created_user = await supa.create_user(user_data)
+
+            # Insert into role-specific table
+            if role == "manager":
+                supa.client.table("managers").insert({"id": user_id}).execute()
+            elif role == "detective":
+                supa.client.table("detectives").insert({"id": user_id}).execute()
             
             return {
                 "user": created_user,

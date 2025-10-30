@@ -21,26 +21,42 @@ async def list_cases(
     - **status**: Filter by case status (optional)
     - **detective_id**: Filter by detective ID (optional)
     
-    Returns all cases for managers, or only cases assigned to the logged-in detective.
+    Managers: returns all cases (with optional filters).
+    Detectives: returns own cases + unassigned cases owned by any of their assigned managers.
     """
     try:
         require_detective_or_manager(current_user.get("role"))
         
         user_role = current_user.get("role")
-        filters = {}
+        svc = get_supabase_service()
         
-        # Detectives only see their own cases
-        if user_role == "detective":
-            filters["detective_id"] = current_user.get("id")
-        elif detective_id:
-            filters["detective_id"] = detective_id
+        # Managers can filter normally
+        if user_role == "manager":
+            filters: dict = {}
+            if detective_id:
+                filters["detective_id"] = detective_id
+            if case_status:
+                filters["status"] = case_status
+            return await svc.get_cases(filters)
         
-        # Add status filter if provided
+        # Detectives: own cases + unassigned cases of any of their managers
+        results: list[dict] = []
+        own_filters = {"detective_id": current_user.get("id")}
         if case_status:
-            filters["status"] = case_status
+            own_filters["status"] = case_status
+        own_cases = await svc.get_cases(own_filters)
+        results.extend(own_cases)
         
-        cases = await get_supabase_service().get_cases(filters)
-        return cases
+        # Fetch manager assignments
+        managers = await svc.get_managers_for_detective(current_user.get("id"))
+        manager_ids = [m["id"] for m in managers]
+        if manager_ids:
+            unassigned = await svc.get_unassigned_cases_by_managers(manager_ids, case_status)
+            # Merge unique by id
+            existing_ids = {c["id"] for c in results}
+            results.extend([c for c in unassigned if c["id"] not in existing_ids])
+        
+        return results
         
     except HTTPException:
         raise
@@ -107,8 +123,9 @@ async def create_case(
         require_manager(current_user.get("role"))
         
         case_data = case.dict(exclude_none=True)
+        # Attach manager_id to the case
+        case_data["manager_id"] = current_user.get("id")
         
-        # If no detective_id is provided, it's unassigned
         created_case = await get_supabase_service().create_case(case_data)
         return created_case
         

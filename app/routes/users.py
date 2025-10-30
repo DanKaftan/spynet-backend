@@ -45,14 +45,17 @@ async def list_detectives(
     Both detectives and managers can access this endpoint.
     """
     try:
-        # Get all users and filter for detectives
-        all_users = await get_supabase_service().list_users()
-        detectives = [user for user in all_users if user.get("role") == "detective"]
-        
-        # Filter by manager if specified
+        svc = get_supabase_service()
         if manager_id:
-            detectives = [det for det in detectives if det.get("manager_id") == manager_id]
-        
+            detectives = await svc.get_detectives_for_manager(manager_id)
+        else:
+            # Return all detectives by reading from detectives table and joining users
+            drows = svc.client.table("detectives").select("id").execute()
+            ids = [r["id"] for r in (drows.data or [])]
+            detectives = []
+            if ids:
+                urows = svc.client.table("users").select("*").in_("id", ids).execute()
+                detectives = urows.data or []
         return detectives
     except Exception as e:
         raise HTTPException(
@@ -70,17 +73,8 @@ async def get_my_detectives(current_user: dict = Depends(get_current_user)):
     Requires manager role.
     """
     try:
-        # Check if user is a manager
         require_manager(current_user.get("role"))
-        
-        # Get detectives assigned to this manager
-        all_users = await get_supabase_service().list_users()
-        my_detectives = [
-            user for user in all_users 
-            if user.get("role") == "detective" and user.get("manager_id") == current_user.get("id")
-        ]
-        
-        return my_detectives
+        return await get_supabase_service().get_detectives_for_manager(current_user.get("id"))
     except HTTPException:
         raise
     except Exception as e:
@@ -88,6 +82,50 @@ async def get_my_detectives(current_user: dict = Depends(get_current_user)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve your detectives: {str(e)}"
         )
+
+
+@router.post("/assign", status_code=status.HTTP_204_NO_CONTENT)
+async def assign_detective(
+    manager_id: str,
+    detective_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Assign a detective to a manager (manager-only).
+    """
+    try:
+        require_manager(current_user.get("role"))
+        # Only allow assigning for self or if current manager
+        if current_user.get("id") != manager_id:
+            # Future: allow admins; for now restrict
+            raise HTTPException(status_code=403, detail="Can only assign to your own manager account")
+        await get_supabase_service().assign_detective_to_manager(detective_id, manager_id)
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to assign: {str(e)}")
+
+
+@router.post("/unassign", status_code=status.HTTP_204_NO_CONTENT)
+async def unassign_detective(
+    manager_id: str,
+    detective_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Unassign a detective from a manager (manager-only).
+    """
+    try:
+        require_manager(current_user.get("role"))
+        if current_user.get("id") != manager_id:
+            raise HTTPException(status_code=403, detail="Can only unassign from your own manager account")
+        await get_supabase_service().unassign_detective_from_manager(detective_id, manager_id)
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to unassign: {str(e)}")
 
 
 @router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)

@@ -15,6 +15,7 @@ class CaseBase(BaseModel):
 class CaseCreate(CaseBase):
     """Case creation model."""
     detective_id: Optional[str] = None  # Assigned detective (optional)
+    # manager_id is set automatically from the authenticated manager creating the case
 
 
 class CaseUpdate(BaseModel):
@@ -30,6 +31,7 @@ class CaseResponse(CaseBase):
     """Case response model."""
     id: str
     detective_id: Optional[str]
+    manager_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     
